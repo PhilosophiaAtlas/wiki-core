@@ -24,3 +24,8 @@ test('named citations are reused and safely escaped',()=>{
 });
 test('missing citation creates diagnostic',()=>assert.equal(compileWiki([record('a','[@unknown]')]).diagnostics[0].code,'W002'));
 test('rejects unsafe source URLs',()=>{const a=record('a','[@x]');a.text=a.text.replace('\n---\n','\nreferences:\n  x:\n    title: Bad\n    url: "javascript:alert(1)"\n---\n');assert.throws(()=>compileWiki([a]),/Invalid references/);});
+
+test('redirects resolve chains and wiki links use canonical targets',()=>{const r=compileWiki([record('a','[[old]]'),record('b','Hi')],{redirects:{old:'older',older:'b'}});assert.equal(r.redirects.old,'b');assert.match(r.articles[0].html,/href="\/wiki\/b\//);assert.deepEqual(r.backlinks.b,['a']);});
+test('rejects cyclic and dangling redirects',()=>{assert.throws(()=>compileWiki([record('a','Hi')],{redirects:{x:'y',y:'x'}}),/cycle/);assert.throws(()=>compileWiki([record('a','Hi')],{redirects:{x:'missing'}}),/Missing/);});
+test('category tree allows multiple parents but rejects cycles',()=>{const r=compileWiki([record('a','Hi')],{categoryParents:{Child:['Parent','Other']}});assert.deepEqual(r.categoryChildren.Parent,['Child']);assert.deepEqual(r.categories.Other,[]);assert.throws(()=>compileWiki([record('a','Hi')],{categoryParents:{A:['B'],B:['A']}}),/Category cycle/);});
+test('navboxes and disambiguation validate targets',()=>{const a=record('a','Hi');a.text=a.text.replace('\n---\n','\nkind: disambiguation\noptions: [b, c]\nnavboxes: [topics]\n---\n');const r=compileWiki([a,record('b','B'),record('c','C')],{navboxes:{topics:{title:'Topics',articles:['b','c']}}});assert.deepEqual(r.articles[0].options,['b','c']);assert.throws(()=>compileWiki([a]),/Invalid disambiguation/);});

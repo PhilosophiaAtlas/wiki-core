@@ -5,7 +5,8 @@ const escape=md.utils.escapeHtml;
 const safeUrl=value=>{try{const u=new URL(value);return ['http:','https:'].includes(u.protocol)?u.href:null;}catch{return null;}};
 const validId = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 export const normalize = value => String(value).normalize('NFD').replace(/\p{M}/gu,'').toLowerCase().replace(/đ/g,'d').trim();
-export function compileWiki(records) {
+import {compileStructure} from './structure.mjs';
+export function compileWiki(records,config={}) {
   const articles = new Map(), aliases = new Map(), diagnostics = [], categories = new Map(), backlinks = new Map();
   for (const {path,text} of records) {
     const match = text.replace(/\r\n/g,'\n').match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
@@ -29,8 +30,11 @@ export function compileWiki(records) {
       categories.get(c).push(a.id);
     }
   }
+  const structure=compileStructure(articles,categories,config);
+  for(const [id,target] of Object.entries(structure.redirects)){const k=normalize(id);if(!aliases.has(k))aliases.set(k,new Set());aliases.get(k).add(target);}
   const resolve = target => {
     if (articles.has(target)) return target;
+    if(Object.hasOwn(structure.redirects,target))return structure.redirects[target];
     const found=aliases.get(normalize(target));
     return found?.size===1 ? [...found][0] : null;
   };
@@ -87,5 +91,5 @@ export function compileWiki(records) {
     }
     a.toc=toc;
   }
-  return {articles:[...articles.values()],categories:Object.fromEntries(categories),backlinks:Object.fromEntries([...backlinks].map(([k,v])=>[k,[...v]])),diagnostics};
+  return {articles:[...articles.values()],categories:Object.fromEntries(categories),backlinks:Object.fromEntries([...backlinks].map(([k,v])=>[k,[...v]])),diagnostics,...structure};
 }
